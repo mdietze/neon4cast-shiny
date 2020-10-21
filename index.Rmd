@@ -1,5 +1,5 @@
 ---
-title: "(In develpment:forecast visualization and leaderboard) Using Old Faithful Eruptions example as placeholder"
+title: "In develpment:forecast visualization and leaderboard"
 output: flexdashboard::flex_dashboard
 runtime: shiny
 ---
@@ -39,7 +39,7 @@ Column
 ```{r}
 renderPlot({
   hist(faithful$eruptions, probability = TRUE, breaks = as.numeric(input$n_breaks),
-       xlab = "Duration (minutes)", main = "Geyser Eruption Duration")
+       xlab = "Duration (minutes)", main = "Using Old Faithful Eruptions example as placeholder")
   
   dens <- density(faithful$eruptions, adjust = input$bw_adjust)
   lines(dens, col = "blue")
