@@ -1,5 +1,5 @@
 ---
-title: "In develpment:forecast visualization and leaderboard"
+title: "In development: NEON Ecological Forecast Challenge forecast visualization and leaderboard"
 output: flexdashboard::flex_dashboard
 runtime: shiny
 ---
