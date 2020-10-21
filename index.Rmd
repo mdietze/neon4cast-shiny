@@ -1,5 +1,5 @@
 ---
-title: "Old Faithful Eruptions"
+title: "(In develpment:forecast visualization and leaderboard) Using Old Faithful Eruptions example as placeholder"
 output: flexdashboard::flex_dashboard
 runtime: shiny
 ---
@@ -34,7 +34,7 @@ sliderInput("bw_adjust", label = "Bandwidth adjustment:",
 Column
 -----------------------------------------------------------------------
 
-### Geyser Eruption Duration
+### Using Old Faithful Eruptions example as placeholder
 
 ```{r}
 renderPlot({
