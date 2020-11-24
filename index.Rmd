@@ -1,47 +1,191 @@
 ---
-title: "In development: NEON Ecological Forecast Challenge forecast visualization and leaderboard"
-output: flexdashboard::flex_dashboard
+title: "EFI Dashboard"
+output: 
+  flexdashboard::flex_dashboard:
+    vertical_layout: scroll
+    theme: "cosmo"
 runtime: shiny
 ---
-
-```{r global, include=FALSE}
-renv::restore(prompt=FALSE)
-# load data in 'global' chunk so it can be shared by all users of the dashboard
-library(datasets)
+```{r setup, include = FALSE}
 library(flexdashboard)
 library(shiny)
 library(gganimate)
 library(plotly)
 library(tidyverse)
-data(faithful)
+library(ncdf4)
+library(scales)
+library(readr)
 
 ```
 
-Column {.sidebar}
+Plot Forecast
+=======================================================================
+
+Pick Forecast Category {.sidebar}
 -----------------------------------------------------------------------
 
-Waiting time between eruptions and the duration of the eruption for the
-Old Faithful geyser in Yellowstone National Park, Wyoming, USA.
-
 ```{r}
-selectInput("n_breaks", label = "Number of bins:",
-            choices = c(10, 20, 35, 50), selected = 20)
+#THIS FILE PATH NEEDS TO BE CHANGED - currently set to my local files
+base.dir = '/svr/shiny-server/neon4cast-shiny'
+target.dir = "/efi_neon_challenge/targets"
 
-sliderInput("bw_adjust", label = "Bandwidth adjustment:",
-            min = 0.2, max = 2, value = 1, step = 0.2)
-```
+dirs = reactive({list.dirs(path = base.dir, recursive = FALSE)})
 
-Column
------------------------------------------------------------------------
 
-### Using Old Faithful Eruptions example as placeholder
+renderUI({
+selectInput("forecast", "Forecast:", 
+            choices = basename(dirs()), selected = dirs()[4])
+      })
 
-```{r}
-renderPlot({
-  hist(faithful$eruptions, probability = TRUE, breaks = as.numeric(input$n_breaks),
-       xlab = "Duration (minutes)", main = "Using Old Faithful Eruptions example as placeholder")
+
+#based on choice above, reads file in dir and creates new inputs to select from 
+
+files = reactive({ list.files(path = paste0(base.dir, input$forecast))})
+
+
+#file selection 
+renderUI({
+    selectInput('file', 'Select File:',
+                choices = files(), selected = files()[2])
+   })
+
+#creates files path from above selection
+file.path = reactive({paste0(base.dir, input$forecast, "/", input$file)})
+
+#reads selected data - used readr's read_csv so we can read zip files
+data <- reactive({as.data.frame(read_csv(file.path()))})
+
+#gets names of data for next selection
+vars <- reactive({names(data())})
+
+
+#allow user selection of y and grouping variable
+renderUI({
   
-  dens <- density(faithful$eruptions, adjust = input$bw_adjust)
-  lines(dens, col = "blue")
+  selectInput('x.var', "Select Variable for X-Axis:", 
+              choices = vars(), selected = vars()[1])
+  
 })
+
+
+renderUI({
+  
+  selectInput('y.var', "Select Variable for Y-Axis:", 
+              choices = vars(), selected = vars()[5])
+  
+})
+
+renderUI({
+  
+  selectInput('group', "Select Grouping Variable:", 
+              choices = c(vars(), 'NA'), selected = vars()[3])
+  
+})
+
+target.files <-  reactive({list.files(path = paste0(target.dir, input$forecast))})
+
+renderUI({
+  
+  selectInput('target', "Select Target File:", 
+              choices = target.files(), selected = target.files()[2])
+  
+})
+  
+#this is to set up data cleaning for the graphing section
+index.x <- reactive(which(names(data()) == input$x.var))
+index.y <- reactive(which(names(data()) == input$y.var))
+index.g <- reactive({if(is.na(input$group)){"NA"} else(which(names(data()) == input$group))})
+  
+var.x <- reactive(data()[,index.x()])
+var.y <- reactive(data()[,index.y()])
+var.g <- reactive({
+  if(input$group == "NA"){rep(1, times = length(var.x()))}else(data()[,index.g()])})
+
+#allows users to check out the head of the data 
+renderPrint(head(data()))
+
+```
+
+
+Forecast Plot 
+-------------------------------------
+
+```{r}
+#clean data and aggregate for graphing 
+ data.sum <- reactive({
+
+   data() %>%
+        mutate(var.x = var.x(), var.y = var.y(), var.g = as.factor(var.g())) %>% 
+         group_by(var.g, var.x) %>%
+        summarize(med = quantile(var.y, 0.5),
+                   upper = quantile(var.y, 0.975),
+                  lower = quantile(var.y, 0.025))
+ 
+ 
+ 
+ })
+
+#make the plot 
+  renderPlot({
+    ggplot(data = data.sum(), aes(y = med, x = var.x, group = var.g)) + 
+    geom_line(data = data.sum(), aes(x =var.x, y = med, color = var.g)) + 
+    geom_ribbon(aes(x = var.x, ymin = lower, ymax = upper, fill = var.g), alpha = 0.4) +
+    facet_wrap(~var.g) 
+  })
+
+
+
+```
+
+Target Plot
+=======================================================================
+
+```{r}
+
+#change to targets path 
+#this is assuming the files are set up the same which holds true right now but might not? 
+
+target.path = reactive(paste0(target.dir, input$forecast, "/", input$target))
+
+targets<- reactive({as.data.frame(read_csv(target.path()))})
+ 
+
+  
+#this is to set up data cleaning for the graphing section 
+  target.x <- reactive(which(names(targets()) == input$x.var))
+  target.y <- reactive(which(names(targets()) == input$y.var))
+  target.g <- reactive({if(is.na(input$group)){"NA"} else(which(names(targets()) == input$group))})
+  
+  target.var.x <- reactive(targets()[,target.x()])
+  target.var.y <- reactive(targets()[,target.y()])
+  target.var.g <- reactive({
+  if(input$group == "NA"){rep(1, times = length(target.var.x()))}else(targets()[,index.g()])})
+ 
+
+targets.sum <- reactive({
+  
+    targets() %>%
+          mutate(var.x = target.var.x(), var.y =  target.var.y(), var.g = as.factor(target.var.g()))
+   })
+  
+
+combo <- reactive({
+     
+     left_join(data.sum(),targets.sum(), by = c("var.x", "var.g"), suffix = c('_data', '_target'))
+     
+   })
+   
+
+renderPlot({
+      ggplot(data = combo(), aes(y = med, x = var.x, group = var.g)) + 
+      geom_line(data = combo(), aes(x = var.x, y = med, color = "Forecast")) + 
+      geom_ribbon(aes(x = var.x, ymin = lower, ymax = upper, fill = "Forecast"), alpha = 0.4) +
+      geom_line(data = combo(), aes(x =var.x, y = var.y, color = "Target")) + 
+        facet_wrap(~var.g)
+      
+    })
+  
+  
+
+
 ```
