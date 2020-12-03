@@ -1,5 +1,5 @@
 ---
-title: "NEON Ecological Forecasting Challenge Dashboard"
+title: "EFI-NEON Ecological Forecasting Challenge Dashboard"
 output: 
   flexdashboard::flex_dashboard:
     vertical_layout: scroll
@@ -15,10 +15,10 @@ library(tidyverse)
 library(ncdf4)
 library(scales)
 library(readr)
-
+library(DT)
 ```
 
-Plot Forecast
+Visualize Forecast Submissions
 =======================================================================
 
 Pick Forecast Category {.sidebar}
@@ -190,16 +190,17 @@ targets.sum <- reactive({
    print(head(combo()))
    
    if(!all(is.na(combo()$var.y))){
-       ggplot(data = combo(), aes(y = med, x = var.x, group = var.g)) + 
+       ggplot(data = combo(), aes(y = med, x = var.x)) + 
        geom_line(data = combo(), aes(x = var.x, y = med, color = "Forecast")) + 
        geom_ribbon(aes(x = var.x, ymin = lower, ymax = upper, fill = "Forecast"), alpha = 0.4) +
        geom_point(data = combo(), aes(x =var.x, y = var.y, color = "Target"), size = 1.5) + 
        labs(x = input$x.var, y = input$y.var) +
        facet_wrap(~var.g)}else{
       
-      ggplot(data = data.sum(), aes(y = med, x = var.x, group = var.g)) + 
-          geom_line(data = data.sum(), aes(x =var.x, y = med, color = var.g)) + 
-          geom_ribbon(aes(x = var.x, ymin = lower, ymax = upper, fill = var.g), alpha = 0.4) +
+      ggplot(data = data.sum(), aes(y = med, x = var.x)) + 
+          geom_line(data = data.sum(), aes(x =var.x, y = med, color = "Forecast")) + 
+          geom_ribbon(aes(x = var.x, ymin = lower, ymax = upper, fill = "Forecast"), alpha = 0.4) +
+          #scale_fill_discrete(name = input$group) + 
           labs(x = input$x.var, y = input$y.var) +
           facet_wrap(~var.g)
          }
@@ -236,4 +237,135 @@ targets.sum <- reactive({
 
 ```
 
+Scores
+=======================================================================
 
+Pick Forecast Category {.sidebar}
+-----------------------------------------------------------------------
+
+```{r}
+#THIS FILE PATH NEEDS TO BE CHANGED - currently set to my local files
+ files2 <-  list.files("/efi_neon_challenge/scores", recursive = TRUE, full.names = TRUE, pattern = "[.]csv")
+
+get_scores <- function(files){
+   teams_tmp <- (str_split(basename(files2), c("-")))
+ score <- NULL
+ for(i in 1:length(teams_tmp)){
+   curr_score <- readr::read_csv(files2[i], col_types = list(id = readr::col_character(), score = readr::col_double()))
+   if(nrow(curr_score) > 0){
+     id <- str_split(curr_score$id, c("_"), simplify = TRUE)
+     dates <- sort(lubridate::as_date(unique(id[,1])))
+     time_step <- dates[2] - dates[1]
+     first_date <- dates[1] - time_step
+     combined <- tibble(date = lubridate::as_date(id[, 1]),
+                        siteID = id[, 2],
+                        target = id[, 3],
+                        horizon = as.numeric(lubridate::as_date(id[, 1]) - first_date),
+                        theme = teams_tmp[[i]][2],
+                        team = tools::file_path_sans_ext(tools::file_path_sans_ext(last(teams_tmp[[i]]))),
+                        score = curr_score$score,
+                        forecast_start = first_date)
+     score <- rbind(score, combined)
+   }
+ }
+ return(score)
+}
+
+ 
+score <- get_scores(files2)
+
+renderUI({
+selectInput("theme", "Forecast theme:", 
+            choices = unique(score$theme), selected = unique(score$theme)[1])
+      })
+
+scores_theme <- reactive({score %>% filter(theme == input$theme)})
+
+vars.score <- reactive({unique(scores_theme()$target)})
+
+renderUI({
+  
+  selectInput('target.var', "Select Target Variable:", 
+              choices = vars.score(), selected = vars.score()[1])
+  
+})
+
+scores_theme_target <- reactive({scores_theme() %>% filter(target == input$target.var)})
+
+vars.horizon <- reactive({unique(scores_theme_target()$horizon)})
+
+renderUI({
+  
+  selectInput('summary.var', "Summarize score by:", 
+              choices = c("no summary",  "horizon","siteID", "forecast start date","all"), selected = "no summary")
+  
+})
+
+
+scores_theme_target_horizon <- reactive({
+  
+  if(input$summary.var == "no summary"){
+    scores_theme_target() %>% 
+      select(theme, target, siteID, date, forecast_start, horizon, team, score) %>% 
+      mutate(score = round(score, 3))
+  }else if(input$summary.var == "horizon"){
+    scores_theme_target() %>% 
+      select(-date) %>% 
+      group_by(siteID, target, theme, team, forecast_start) %>% 
+      summarize(score = mean(score, na.rm = TRUE)) %>% 
+      mutate(horizon = "all") %>% 
+      mutate(score = round(score, 3)) %>% 
+      select(theme, target, siteID, forecast_start, horizon, team, score)
+  }else if(input$summary.var == "siteID"){
+      scores_theme_target() %>% 
+      select(-date) %>% 
+      group_by(target, horizon, theme, team, forecast_start) %>% 
+      summarize(score = mean(score, na.rm = TRUE)) %>% 
+      mutate(siteID = "all") %>% 
+      mutate(score = round(score, 3)) %>% 
+      select(theme, target, siteID, forecast_start, horizon, team, score)
+  }else if(input$summary.var == "forecast start date"){
+          scores_theme_target() %>% 
+      select(-date) %>% 
+      group_by(target, horizon, theme, team, siteID) %>% 
+      summarize(score = mean(score, na.rm = TRUE)) %>% 
+      mutate(forecast_start = "all") %>% 
+      mutate(score = round(score, 3)) %>% 
+      select(theme, target, siteID, forecast_start, horizon, team, score)
+  }else if(input$summary.var == "all"){
+          scores_theme_target() %>% 
+      select(-date) %>% 
+      group_by(target, theme, team) %>% 
+      summarize(score = mean(score, na.rm = TRUE)) %>% 
+      mutate(forecast_start = "all",
+             siteID = "all",
+             horizon = "all") %>% 
+      mutate(score = round(score, 3)) %>% 
+      select(theme, target, siteID, forecast_start, horizon, team, score)
+  }
+})
+
+```
+
+Forecast Plot 
+-------------------------------------
+
+```{r}
+ #data.subset <- reactive({
+#
+#   score() 
+# })
+
+
+```
+
+### Continuous Ranked Probability Score (CRPS) 
+
+```{r}
+
+renderDataTable({
+  
+  DT::datatable(scores_theme_target_horizon(), options = list(bPaginate = FALSE))
+
+                })
+```
