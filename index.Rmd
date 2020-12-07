@@ -248,10 +248,10 @@ Pick Forecast Category {.sidebar}
  files2 <-  list.files("/efi_neon_challenge/scores", recursive = TRUE, full.names = TRUE, pattern = "[.]csv")
 
 get_scores <- function(files){
-   teams_tmp <- (str_split(basename(files2), c("-")))
+   teams_tmp <- (str_split(basename(files), c("-")))
  score <- NULL
  for(i in 1:length(teams_tmp)){
-   curr_score <- readr::read_csv(files2[i], col_types = list(id = readr::col_character(), score = readr::col_double()))
+   curr_score <- readr::read_csv(files[i], col_types = list(id = readr::col_character(), score = readr::col_double()))
    if(nrow(curr_score) > 0){
      id <- str_split(curr_score$id, c("_"), simplify = TRUE)
      dates <- sort(lubridate::as_date(unique(id[,1])))
