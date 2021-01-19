@@ -7,6 +7,7 @@ output:
 runtime: shiny
 ---
 ```{r setup, include = FALSE}
+remotes::install_deps()
 library(flexdashboard)
 library(shiny)
 library(gganimate)
@@ -297,7 +298,7 @@ Pick Forecast Category {.sidebar}
 
 ```{r}
 #THIS FILE PATH NEEDS TO BE CHANGED - currently set to my local files
- files2 <-  list.files("/efi_neon_challenge/scores", recursive = TRUE, full.names = TRUE, pattern = "[.]csv")
+files2 <-  list.files("/efi_neon_challenge/scores", recursive = TRUE, full.names = TRUE, pattern = "[.]csv")
 
 get_scores <- function(files){
    teams_tmp <- (str_split(basename(files), c("-")))
