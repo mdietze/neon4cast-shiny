@@ -1,0 +1,3 @@
+Package: efi_neon_shiny
+Version: 0.1.0
+Imports: flexdashboard,shiny, gganimate, plotly,tidyverse,ncdf4,scales,readr,DT,gsubfn, tools
