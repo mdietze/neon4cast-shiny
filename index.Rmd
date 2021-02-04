@@ -32,7 +32,9 @@ Pick Forecast Category {.sidebar}
 base.dir = '/efi_neon_challenge/forecasts/'
 target.dir = "/efi_neon_challenge/targets/"
 
-dirs = reactive({ list.files(path = "/efi_neon_challenge/forecasts", recursive = FALSE ) })
+dirs = reactive({ files <- list.files(path = "/efi_neon_challenge/forecasts", recursive = FALSE)
+ files[which(basename(files) != "not_in_standard")]}
+ )
 
 renderUI({
   selectInput("forecast", "Forecast theme:", 
