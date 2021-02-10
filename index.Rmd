@@ -7,7 +7,7 @@ output:
 runtime: shiny
 ---
 ```{r setup, include = FALSE}
-remotes::install_deps()
+#remotes::install_deps()
 library(flexdashboard)
 library(shiny)
 library(gganimate)
@@ -89,12 +89,18 @@ file.path = reactive({paste0(base.dir, input$forecast, "/", file())})
 ext = reactive(file_ext(file.path()))
 
 #need target vars for nc file var get 
-target_variables <- c("oxygen", "temperature", "richness", "abundance", "nee", "le", "vswc", "gcc_90")
+target_variables <- c("oxygen", "temperature", "richness", "abundance", "nee", "le", "vswc", "gcc_90", "Ixodes_scapularis", "Ambloyomma_americanum")
 #reads selected data 
 data <- reactive({
   
   if(ext() %in% c("gz","csv")){  #if file is csv zip file
-    as.data.frame(read_csv(file.path()))
+    print(file.path())
+    d <- as.data.frame(read_csv(file.path(), guess_max = 100000))
+    if("plotID" %in% names(d)){
+      d %>% mutate(siteID = plotID)
+    }else{
+      d
+    }
   }else if(ext() == "nc"){ #if file is nc
     
     nc <- ncdf4::nc_open(file.path())
@@ -152,6 +158,14 @@ ensemble <- reactive({
 
 sites <- reactive(unique(data()$siteID))
 
+plots <- reactive({
+  if(length(unique(data()$plotID)) > 0){
+  unique(data()$plotID)
+}else{
+  NA
+}
+})
+
 x_axis_variables <- c("time")
 
 y.inputs = reactive(vars()[which(vars() %in% target_variables)])
@@ -173,8 +187,9 @@ renderUI({
   
 })
 
+
 renderUI({
-  
+
   selectInput('site', "Select Sites:",
               choices = c(sites()), selected = sites()[1],multiple = TRUE)
   
@@ -184,8 +199,11 @@ renderUI({
 
 sub.data <- reactive({
   
-  data() %>% 
+    data() %>% 
     filter(siteID %in% input$site)
+
+  
+
 })
 
 
@@ -218,16 +236,24 @@ Forecast Plot
 #clean data and aggregate for graphing 
 data.sum <- reactive({
   
+    if("plotID" %in% names(sub.data())){
+      d <- sub.data() %>% mutate(siteID = plotID) 
+    }else{
+      d <- sub.data()
+    }
+  
   if(ensemble()){
     
-    sub.data() %>%
+
+    
+    d %>%
     mutate(var.x = var.x(), var.y = var.y()) %>% 
     group_by(siteID, var.x) %>%
     summarize(med = quantile(var.y, 0.5, na.rm = TRUE),
               upper = quantile(var.y, 0.975, na.rm = TRUE),
               lower = quantile(var.y, 0.025, na.rm = TRUE))
   }else{
-    sub.data() %>% 
+    d %>% 
     mutate(var.x = var.x(), var.y = var.y()) %>% 
       select(var.y, "statistic", var.x, siteID) %>% 
       pivot_wider(names_from = statistic, values_from = var.y) %>% 
@@ -261,7 +287,13 @@ target.var.y <- reactive(targets()[,target.y()])
 
 targets.sum <- reactive({
   
-  targets() %>%
+    if("plotID" %in% names(targets())){
+      d <- targets() %>% mutate(siteID = plotID)
+    }else{
+      d <- targets() 
+    }
+  
+  d %>%
     mutate(var.x = target.var.x(), var.y =  target.var.y(), time = as.Date(time)) %>% 
     filter(siteID %in% input$site)
 })
