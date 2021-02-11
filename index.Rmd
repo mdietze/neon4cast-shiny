@@ -376,20 +376,39 @@ get_scores <- function(files){
   teams_tmp <- (str_split(basename(files), c("-")))
   score <- NULL
   for(i in 1:length(teams_tmp)){
-    curr_score <- readr::read_csv(files[i], col_types = list(id = readr::col_character(), score = readr::col_double()))
+    curr_score <- readr::read_csv(files[i]) %>% 
+      mutate(score = as.numeric(score))
     if(nrow(curr_score) > 0){
-      id <- str_split(curr_score$id, c("_"), simplify = TRUE)
-      dates <- sort(lubridate::as_date(unique(id[,1])))
-      time_step <- dates[2] - dates[1]
-      first_date <- dates[1] - time_step
-      combined <- tibble(date = lubridate::as_date(id[, 1]),
-                         siteID = id[, 2],
-                         target = id[, 3],
-                         horizon = as.numeric(lubridate::as_date(id[, 1]) - first_date),
+      if(str_detect(teams_tmp[[i]][2], "30min")){
+      unique_dates <- sort(lubridate::as_datetime(unique(curr_score$time)))
+      dates <- lubridate::as_datetime(curr_score$time)
+      }else{
+      unique_dates <- sort(lubridate::as_date(unique(curr_score$time)))
+            dates <- lubridate::as_date(curr_score$time)
+      }
+      time_step <- unique_dates[2] - unique_dates[1]
+      first_date <- unique_dates[1] - time_step
+      if(teams_tmp[[i]][2] != "ticks"){
+      combined <- tibble(date = dates,
+                         siteID = curr_score$siteID,
+                         target = curr_score$target,
+                         horizon = as.numeric(dates - first_date) / as.numeric(time_step),
                          theme = teams_tmp[[i]][2],
                          team = tools::file_path_sans_ext(tools::file_path_sans_ext(last(teams_tmp[[i]]))),
                          score = curr_score$score,
                          forecast_start = first_date)
+      }else{
+        
+                        combined <- tibble(date = dates,
+                         siteID = curr_score$plotID,
+                         target = curr_score$target,
+                         horizon = as.numeric(dates - first_date) / as.numeric(time_step),
+                         theme = teams_tmp[[i]][2],
+                         team = tools::file_path_sans_ext(tools::file_path_sans_ext(last(teams_tmp[[i]]))),
+                         score = curr_score$score,
+                         forecast_start = first_date)
+          
+      }
       score <- rbind(score, combined)
     }
   }
