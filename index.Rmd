@@ -32,70 +32,90 @@ Pick Forecast Category {.sidebar}
 base.dir = '/efi_neon_challenge/forecasts/'
 target.dir = "/efi_neon_challenge/targets/"
 
-dirs = reactive({ files <- list.files(path = "/efi_neon_challenge/forecasts", recursive = FALSE)
- files[which(basename(files) != "not_in_standard")]}
- )
+dirs <- reactive({
+  files <- list.files(path = "/efi_neon_challenge/forecasts", recursive = FALSE)
+  files[which(basename(files) != "not_in_standard")]
+  })
 
 renderUI({
   selectInput("forecast", "Forecast theme:", 
               choices = basename(dirs()), selected = dirs()[1])
-})
+  })
 
 
 #based on choice above, reads file in dir and creates new inputs to select from 
 
 files <- reactive({
-  
-fnames <- list.files(path = paste0(base.dir, input$forecast), pattern = input$forecast)
-fnames[which(file_ext(fnames) %in% c("nc", "gz", "csv"))]
-})
+  fnames <- list.files(path = paste0(base.dir, input$forecast), pattern = input$forecast)
+  fnames[which(file_ext(fnames) %in% c("nc", "gz", "csv"))]
+  })
 
 file.date <- reactive({
-  lubridate::as_date(strapplyc(files(), pattern = "[0-9-]{8,}", simplify = TRUE) %>% 
+  d <- lubridate::as_date(strapplyc(files(), pattern = "[0-9-]{8,}", simplify = TRUE) %>% 
                                             gsub("-$", "", .) %>% 
                                             gsub("^-", "", . ))
+  sort(d, decreasing = TRUE)
   })
 
 #file selection 
 renderUI({
-  selectInput('date', 'Select Forecast Date:',
+  selectInput('date', 'Select First Date of Forecast:',
               choices = file.date(), selected = max(file.date()))
-})
+  })
 
-files.date = reactive({
+files.date <- reactive({
   fnames <- list.files(paste0(base.dir, input$forecast), pattern = input$date)
   fnames[which(file_ext(fnames) %in% c("nc", "gz", "csv"))]
   })
 
-file.model =  reactive({d_ext = file_ext(files.date()) 
-files.date() %>% 
+file.model =  reactive({
+  files.date() %>% 
   str_extract(., "\\-[[:alpha:]](.*?)\\.") %>% 
-  gsub("^-", "", .) %>% gsub(".$","",.)
-})
+  gsub("^-", "", .) %>% 
+    gsub(".$","",.)
+  })
 
 
 renderUI({
   selectInput('model', 'Select Model:',
               choices = file.model(), selected = file.model()[1])
-})
+  })
 
-file = reactive({files.date()[grep(input$model, files.date())]})
+file <- reactive({
+  print(files.date())
+  files.date()[grep(input$model, files.date())]
+  })
 
 
 #creates files path from above selection
-file.path = reactive({paste0(base.dir, input$forecast, "/", file())})
+file.path <- reactive({
+  paste0(base.dir, input$forecast, "/", file())
+  })
 
 #grab extension for csv vs nc file opening 
-ext = reactive(file_ext(file.path()))
+ext <- reactive({
+  file_ext(file.path())
+  })
 
 #need target vars for nc file var get 
-target_variables <- c("oxygen", "temperature", "richness", "abundance", "nee", "le", "vswc", "gcc_90", "Ixodes_scapularis", "Ambloyomma_americanum")
+target_variables <- c("oxygen", 
+                      "temperature", 
+                      "richness", 
+                      "abundance", 
+                      "nee", 
+                      "le", 
+                      "vswc", 
+                      "gcc_90", 
+                      "ixodes_scapularis", 
+                      "ambloyomma_americanum")
+
 #reads selected data 
 data <- reactive({
   
   if(ext() %in% c("gz","csv")){  #if file is csv zip file
     print(file.path())
-    d <- as.data.frame(read_csv(file.path(), guess_max = 100000))
+    d <- as.data.frame(read_csv(file.path(), guess_max = 100000)) %>% 
+      filter(time >= input$date)
     if("plotID" %in% names(d)){
       d %>% mutate(siteID = plotID)
     }else{
@@ -139,9 +159,8 @@ data <- reactive({
       tidyr::pivot_wider(names_from = variable, values_from = value)
     
     as.data.frame(combined_forecast) 
-    
   }
-})
+  })
 
 #gets names of data for next selection
 vars <- reactive({names(data())})
@@ -156,58 +175,54 @@ ensemble <- reactive({
 })
 
 
-sites <- reactive(unique(data()$siteID))
+sites <- reactive({
+  unique(data()$siteID)
+  })
 
 plots <- reactive({
   if(length(unique(data()$plotID)) > 0){
-  unique(data()$plotID)
-}else{
-  NA
-}
-})
+    unique(data()$plotID)
+  }else{
+    NA
+  }
+  })
 
 x_axis_variables <- c("time")
 
-y.inputs = reactive(vars()[which(vars() %in% target_variables)])
-x.inputs = reactive(vars()[which(vars() %in% x_axis_variables)])
+y.inputs <- reactive({
+  vars()[which(vars() %in% target_variables)]
+  })
+
+x.inputs <- reactive({
+  vars()[which(vars() %in% x_axis_variables)]
+  })
 
 
 #allow user selection of y and grouping variable
-renderUI({
-  selectInput('x.var', "Select Variable for X-Axis:", 
-              choices = x.inputs(), selected = x.inputs()[1])
-  
-})
+#renderUI({
+#  selectInput('x.var', "Select Variable for X-Axis:", 
+#              choices = x.inputs(), selected = x.inputs()[1])
+#  })
 
 
 renderUI({
-  
   selectInput('y.var', "Select Variable for Y-Axis:", 
               choices = y.inputs(), selected = y.inputs()[1])
-  
-})
-
+  })
 
 renderUI({
-
   selectInput('site', "Select Sites:",
               choices = c(sites()), selected = sites()[1],multiple = TRUE)
-  
-})
-
-
+  })
 
 sub.data <- reactive({
-  
+
     data() %>% 
     filter(siteID %in% input$site)
-
-  
-
-})
+  })
 
 
-target.files.1 <-  reactive({list.files(path = paste0(target.dir, input$forecast))})
+target.files.1 <- reactive({list.files(path = paste0(target.dir, input$forecast))})
 target.files <- reactive(target.files.1()[-which(target.files.1() == 'prov.json')])
 
 renderUI({
@@ -218,11 +233,13 @@ renderUI({
 })
 
 #this is to set up data cleaning for the graphing section
-index.x <- reactive(which(names(sub.data()) == input$x.var))
-index.y <- reactive(which(names(sub.data()) == input$y.var))
+#index.x <- reactive(which(names(sub.data()) == input$x.var))
+index.y <- reactive({
+  which(names(sub.data()) == input$y.var)
+  })
 
 
-var.x <- reactive(sub.data()[,index.x()])
+#var.x <- reactive(sub.data()[,index.x()])
 var.y <- reactive(sub.data()[,index.y()])
 
 
@@ -236,6 +253,8 @@ Forecast Plot
 #clean data and aggregate for graphing 
 data.sum <- reactive({
   
+
+  
     if("plotID" %in% names(sub.data())){
       d <- sub.data() %>% mutate(siteID = plotID) 
     }else{
@@ -244,20 +263,21 @@ data.sum <- reactive({
   
   if(ensemble()){
     
-
+    
     
     d %>%
-    mutate(var.x = var.x(), var.y = var.y()) %>% 
-    group_by(siteID, var.x) %>%
+    mutate(var.y = var.y()) %>% 
+    group_by(siteID, time) %>%
     summarize(med = quantile(var.y, 0.5, na.rm = TRUE),
               upper = quantile(var.y, 0.975, na.rm = TRUE),
               lower = quantile(var.y, 0.025, na.rm = TRUE))
   }else{
-    d %>% 
-    mutate(var.x = var.x(), var.y = var.y()) %>% 
-      select(var.y, "statistic", var.x, siteID) %>% 
-      pivot_wider(names_from = statistic, values_from = var.y) %>% 
-    mutate(med = mean,
+
+    d1 <- d %>% 
+    mutate(var.y = var.y())  %>%  
+      select(var.y, "statistic", "time", siteID) %>%  
+      pivot_wider(names_from = statistic, values_from = var.y) %>%  
+      mutate(med = mean,
            upper = mean + 1.96 * sd,
            lower = mean - 1.96 * sd)
   }
@@ -278,10 +298,10 @@ targets<- reactive({as.data.frame(read_csv(target.path()))})
 
 
 #this is to set up data cleaning for the graphing section 
-target.x <- reactive(which(names(targets()) == input$x.var))
+#target.x <- reactive(which(names(targets()) == input$x.var))
 target.y <- reactive(which(names(targets()) == input$y.var))
 
-target.var.x <- reactive(targets()[,target.x()])
+#target.var.x <- reactive(targets()[,target.x()])
 target.var.y <- reactive(targets()[,target.y()])
 
 
@@ -294,7 +314,9 @@ targets.sum <- reactive({
     }
   
   d %>%
-    mutate(var.x = target.var.x(), var.y =  target.var.y(), time = as.Date(time)) %>% 
+    mutate(var.x = time, 
+           var.y =  target.var.y(), 
+           time = as.Date(time)) %>% 
     filter(siteID %in% input$site)
 })
 
@@ -303,7 +325,7 @@ targets.sum <- reactive({
 
 combo <- reactive({
   
-  left_join(data.sum(),targets.sum(), by = c("var.x", "siteID"), suffix = c('_data', '_target'))
+  left_join(data.sum(),targets.sum(), by = c("time", "siteID"), suffix = c('_data', '_target'))
   
 })
 
@@ -312,21 +334,23 @@ combo <- reactive({
 
 target.plot <- reactive({
   
-  print(head(combo()))
+  #print(head(combo()))
   
   if(!all(is.na(combo()$var.y))){
-    ggplot(data = combo(), aes(y = med, x = var.x)) + 
-      geom_line(data = combo(), aes(x = var.x, y = med, color = "Forecast (Median)")) + 
-      geom_ribbon(aes(x = var.x, ymin = lower, ymax = upper, fill = "Forecast (95% CI)"), alpha = 0.4) +
-      geom_point(data = combo(), aes(x =var.x, y = var.y, color = "Target"), size = 1.5) + 
-      labs(x = input$x.var, y = input$y.var) +
+    ggplot(data = combo(), aes(y = med, x = time)) + 
+      geom_line(data = combo(), aes(x = time, y = med, color = "Forecast (Median)")) + 
+      geom_ribbon(aes(x = time, ymin = lower, ymax = upper, fill = "Forecast (95% CI)"), alpha = 0.4) +
+      geom_point(data = combo(), aes(x =time, y = var.y, color = "Target"), size = 1.5) + 
+      scale_x_date(labels = date_format("%Y-%m-%d")) +
+      labs(x = "time", y = input$y.var) +
       facet_wrap(~siteID)}else{
         
-        ggplot(data = data.sum(), aes(y = med, x = var.x)) + 
-          geom_line(data = data.sum(), aes(x =var.x, y = med, color = "Forecast (Median)")) + 
-          geom_ribbon(aes(x = var.x, ymin = lower, ymax = upper, fill = "Forecast (95% CI)"), alpha = 0.4) +
+        ggplot(data = data.sum(), aes(y = med, x = time)) + 
+          geom_line(data = data.sum(), aes(x =time, y = med, color = "Forecast (Median)")) + 
+          geom_ribbon(aes(x = time, ymin = lower, ymax = upper, fill = "Forecast (95% CI)"), alpha = 0.4) +
           #scale_fill_discrete(name = input$group) + 
-          labs(x = input$x.var, y = input$y.var) +
+          scale_x_date(labels = date_format("%Y-%m-%d")) +
+          labs(x = "time", y = input$y.var) +
           facet_wrap(~siteID)
       }
   
@@ -353,10 +377,10 @@ renderPlot({
 #plot full target plot 
 renderPlot({
   ggplot(data = targets.sum()) + 
-    geom_point(aes(x = var.x, y = var.y, color = "Observed Data")) + 
+    geom_point(aes(x = time, y = var.y, color = "Observed Data")) + 
     facet_wrap(~siteID) + 
     #scale_x_date(date_breaks = "6 month", date_labels =  "%b %Y") +
-    labs(x = input$x.var, y = input$y.var)
+    labs(x = "time", y = input$y.var)
   
 })
 
@@ -425,7 +449,7 @@ scores_theme_target_horizon <- reactive({
   if(input$summary.var == "no summary"){
     scores_theme_target() %>% 
       select(theme, target, siteID, time, forecast_start, horizon, team, score) %>% 
-      mutate(score = round(score, 3))
+      mutate(score = round(score, 5))
 
   }else if(input$summary.var == "horizon"){
     scores_theme_target() %>% 
@@ -433,7 +457,7 @@ scores_theme_target_horizon <- reactive({
       group_by(siteID, target, theme, team, forecast_start) %>% 
       summarize(score = mean(score, na.rm = TRUE)) %>% 
       mutate(horizon = "all") %>% 
-      mutate(score = round(score, 3)) %>% 
+      mutate(score = round(score, 5)) %>% 
       select(theme, target, siteID, forecast_start, horizon, team, score)
   }else if(input$summary.var == "siteID"){
     scores_theme_target() %>% 
@@ -441,7 +465,7 @@ scores_theme_target_horizon <- reactive({
       group_by(target, horizon, theme, team, forecast_start) %>% 
       summarize(score = mean(score, na.rm = TRUE)) %>% 
       mutate(siteID = "all") %>% 
-      mutate(score = round(score, 3)) %>% 
+      mutate(score = round(score, 5)) %>% 
       select(theme, target, siteID, forecast_start, horizon, team, score)
   }else if(input$summary.var == "forecast start date"){
     scores_theme_target() %>% 
@@ -449,7 +473,7 @@ scores_theme_target_horizon <- reactive({
       group_by(target, horizon, theme, team, siteID) %>% 
       summarize(score = mean(score, na.rm = TRUE)) %>% 
       mutate(forecast_start = "all") %>% 
-      mutate(score = round(score, 3)) %>% 
+      mutate(score = round(score, 5)) %>% 
       select(theme, target, siteID, forecast_start, horizon, team, score)
   }else if(input$summary.var == "all"){
     scores_theme_target() %>% 
@@ -459,7 +483,7 @@ scores_theme_target_horizon <- reactive({
       mutate(forecast_start = "all",
              siteID = "all",
              horizon = "all") %>% 
-      mutate(score = round(score, 3)) %>% 
+      mutate(score = round(score, 5)) %>% 
       select(theme, target, siteID, forecast_start, horizon, team, score)
   }
 })
