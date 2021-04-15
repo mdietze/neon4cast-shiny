@@ -107,16 +107,21 @@ target_variables <- c("oxygen",
                       "vswc", 
                       "gcc_90", 
                       "ixodes_scapularis", 
-                      "ambloyomma_americanum")
+                      "amblyomma_americanum")
 
 #reads selected data 
 data <- reactive({
   
   if(ext() %in% c("gz","csv")){  #if file is csv zip file
     print(file.path())
-    d <- as.data.frame(read_csv(file.path(), guess_max = 100000)) %>% 
+    if(input$forecast == "ticks"){
+       d <- as.data.frame(read_csv(file.path(), guess_max = 100000))
+    }else{
+          d <- as.data.frame(read_csv(file.path(), guess_max = 100000)) %>% 
       filter(time >= input$date)
+    }
     if("plotID" %in% names(d)){
+      print(d)
       d %>% mutate(siteID = plotID)
     }else{
       d
