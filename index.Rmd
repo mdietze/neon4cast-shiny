@@ -29,8 +29,21 @@ Pick Forecast Category {.sidebar}
 
 ```{r}
 #THIS FILE PATH NEEDS TO BE CHANGED - currently set to my local files
-base.dir = '/efi_neon_challenge/forecasts/'
-target.dir = "/efi_neon_challenge/targets/"
+base.dir = '~/efi_neon_challenge/forecasts/'
+target.dir = "~/efi_neon_challenge/targets/"
+
+fnames <- tibble(files = list.files(path = base.dir, recursive = TRUE, full.names = TRUE)) %>% 
+  filter(file_ext(files) %in% c("nc","csv")) %>% 
+  filter(!str_detect(files, "not_in_standard")) %>% 
+  mutate(basename = basename(files))
+
+data <- unlist(str_split_fixed(tools::file_path_sans_ext(fnames$basename), pattern = "-", 5)) %>% 
+  as_tibble() %>% 
+  unite("date", V2:V4, sep = "-") %>% 
+  rename("theme" = V1,
+         "team" = V5) %>% 
+  bind_cols(fnames) %>% 
+  select(-basename)
 
 theme_choices <- c("aquatics", 
                    "beetles", 
@@ -206,6 +219,123 @@ data <- reactive({
   }
   d2
 })
+
+### NEW ###
+
+all_files <- reactive({
+  print(data)
+  data %>% filter(theme == input$theme)
+  
+})
+
+#reads selected data 
+data_date_model <- reactive({
+  
+  fnames <- all_files()$files
+  team_name <- all_files()$team
+  start_date <- all_files()$date
+  theme <- all_files()$theme
+
+  d2 <- NULL
+  
+  if(!is.null(fnames)){
+    
+    for(k in 1:length(fnames)){
+      print(k)
+      
+      if(file_ext(fnames[k]) %in% c("gz","csv")){  #if file is csv zip file
+        if(input$forecast == "ticks"){
+          d <- as.data.frame(read_csv(fnames[k], guess_max = 100000))
+        }else{
+          d <- as.data.frame(read_csv(fnames[k], guess_max = 100000)) %>% 
+            filter(time >= input$date)
+          
+          print(d)
+          
+          
+        }
+        if("plotID" %in% names(d)){
+          d <- d %>% mutate(siteID = plotID)
+        }else{
+          d
+        }
+        
+      }else if(file_ext(fnames[k]) == "nc"){ #if file is nc
+        
+        nc <- ncdf4::nc_open(fnames[k])
+        siteID <- ncdf4::ncvar_get(nc, "siteID")
+        time <- ncdf4::ncvar_get(nc, "time")
+        siteID <- ncdf4::ncvar_get(nc, "siteID")
+        time <- ncdf4::ncvar_get(nc, "time")
+        t_string <- strsplit(ncdf4::ncatt_get(nc, varid = "time", "units")$value, " ")[[1]]
+        if(t_string[1] == "days"){
+          tustr<-strsplit(ncdf4::ncatt_get(nc, varid = "time", "units")$value, " ")
+          time <-lubridate::as_date(time,origin=unlist(tustr)[3])
+        }else{
+          tustr <- lubridate::as_datetime(strsplit(ncdf4::ncatt_get(nc, varid = "time", "units")$value, " ")[[1]][3])
+          time <- as.POSIXct.numeric(time, origin = tustr)
+        }
+        
+        team <- ncdf4::ncatt_get(nc, varid = 0, "forecast_project_id")$value
+        targets = names(nc$var)[which(names(nc$var) %in% target_variables)]
+        
+        combined_forecast <- NULL
+        for(j in 1:length(targets)){
+          forecast_targets <- ncdf4::ncvar_get(nc, targets[j])
+          for(i in 1:length(siteID)){
+            tmp <- forecast_targets[ ,i ,]
+            d <- cbind(time, as.data.frame(tmp))
+            names(d) <- c("time", seq(1,dim(tmp)[2]))
+            d <- d %>%
+              tidyr::pivot_longer(-time, names_to = "ensemble", values_to = "value") %>%
+              dplyr::mutate(siteID = siteID[i],
+                            variable = targets[j])
+            combined_forecast <- rbind(combined_forecast, d)
+          }
+        }
+        ncdf4::nc_close(nc)
+        combined_forecast <- combined_forecast %>%
+          tidyr::pivot_wider(names_from = variable, values_from = value)
+        
+        d <- as.data.frame(combined_forecast) 
+      }
+
+      d <- d %>% mutate(team = team_name[k])
+
+      ## add missing optional columns
+      if(!("forecast_start_time" %in% colnames(d)))
+        d <- d %>% mutate(forecast_start_time = start_date[k])
+      if(!("theme" %in% colnames(d))) 
+        d <- d %>% mutate(theme = theme[k])
+            
+      ### organize so data can be combined  **** need to generalize to drop gcc_90 ****
+      if("ensemble" %in% colnames(d)){
+        d <- d %>% 
+          group_by(time, siteID, forecast_start_time, team, theme) %>% 
+          summarise(mean = mean(gcc_90, na.rm = TRUE),
+                    sd = sd(gcc_90, na.rm = TRUE),
+                    upper95 = quantile(gcc_90, 0.975, na.rm = TRUE),
+                    lower95 = quantile(gcc_90, 0.025, na.rm = TRUE)) %>% 
+          pivot_longer(cols = c("mean","sd", "upper95","lower95"), names_to = "statistic", values_to = "gcc_90") %>% 
+          select(time, siteID, forecast_start_time,  team, theme, statistic, gcc_90)
+      }else{
+        d <- d %>% 
+          select(time, siteID, forecast_start_time, team, theme, statistic, gcc_90) %>% 
+          pivot_wider(names_from = statistic, values_from = gcc_90, values_fn = mean) %>% 
+          mutate(upper95 = mean + 1.96 * sd,
+                 lower95 = mean - 1.96 * sd) %>% 
+          pivot_longer(cols = c("mean","sd", "upper95","lower95"), names_to = "statistic", values_to = "gcc_90")
+      }
+      
+      ### combine
+      d2 <- rbind(d2, d)
+    }
+  }
+  print(d2)
+  d2
+})
+
+### OLD ####
 
 sites <- reactive({
   if(!is.null(data())){
