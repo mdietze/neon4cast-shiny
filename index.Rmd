@@ -240,6 +240,8 @@ data_date_model <- reactive({
   
   if(!is.null(fnames)){
     
+    ## replace loading of files with d <- neon4cast:::read_forecast(data$files[i])
+    
     for(k in 1:length(fnames)){
       print(k)
       
@@ -307,6 +309,8 @@ data_date_model <- reactive({
         d <- d %>% mutate(forecast_start_time = start_date[k])
       if(!("theme" %in% colnames(d))) 
         d <- d %>% mutate(theme = theme[k])
+      if(!("horizon" %in% colnames(d))) 
+        d <- d %>% mutate(horizon = d$time - as.Date(d$forecast_start_time))
             
       ### organize so data can be combined  **** need to generalize to drop gcc_90 ****
       if("ensemble" %in% colnames(d)){
