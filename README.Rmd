@@ -40,6 +40,7 @@ Here is an example on how to get the Shiny app running locally for the phenology
     ```
 1. Download the phenology forecasts to the `base.dir`
     ```{r, eval = FALSE}
+    library(neon4cast)
     download_forecast(theme = "phenology", dir = "/efi_neon_challenge/forecasts/")
     ```
 1. Download the corresponding targets files on [data.ecoforecast.org/minio/targets/](https://data.ecoforecast.org/minio/targets/) to the `target.dir`. So for our phenology example:

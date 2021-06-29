@@ -39,6 +39,7 @@ phenology forecasts:
 2.  Download the phenology forecasts to the `base.dir`
     
     ``` r
+    library(neon4cast)
     download_forecast(theme = "phenology", dir = "/efi_neon_challenge/forecasts/")
     ```
 
