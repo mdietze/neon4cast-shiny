@@ -32,7 +32,8 @@ for(m in seq_along(models)){
                            col=ecoforecastR::col.alpha(m,0.5))
   lines(x=leadTime,y=hor[[m]]$mean,col=m)
 }
-points(targ$time,targ$gcc_90)
+leadTime = xrng[1]:xrng[2]
+lines(leadTime,rep(targ$gcc_90[which(targ$time == date)],length(leadTime)),lwd=3)
 
 
 
