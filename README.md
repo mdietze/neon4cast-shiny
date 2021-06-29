@@ -10,12 +10,14 @@ Shiny app at [shiny.ecoforecast.org](https://shiny.ecoforecast.org/)
 
 ## Testing Shiny app locally
 
-The code in `index.Rmd` that runs the app assumes the forecasts and
-target files are saved in local directories. Towards the top of
+The code in `index.Rmd` that runs the app assumes the forecasts, target,
+and scores files are saved in local directories. Towards the top of
 `index.Rmd`
 
   - `base.dir`: `"/efi_neon_challenge/forecasts/"`
   - `target.dir`: `"/efi_neon_challenge/targets/"`
+  - scores directory (defined manually deeper in script):
+    `/efi_neon_challenge/scores/`
 
 You can change these directory paths during local development, but be
 sure to revert them before merging to GitHub.
@@ -43,14 +45,26 @@ phenology forecasts:
     download_forecast(theme = "phenology", dir = "/efi_neon_challenge/forecasts/")
     ```
 
-3.  Download the corresponding targets files on
+3.  Download the corresponding targets files from
     [data.ecoforecast.org/minio/targets/](https://data.ecoforecast.org/minio/targets/)
     to the `target.dir`. So for our phenology example:
     
-    1.  Go to the [phenology targets
-        folder](https://data.ecoforecast.org/minio/targets/phenology/)
-    2.  Click on both `prov.json` and `phenology-targets.csv.gz` and
-        download
-    3.  Move these files to to `/efi_neon_challenge/targets/phenology/`
+    1.  Make a directory `/efi_neon_challenge/targets/phenology/`
+    
+    2.  Download the file
+        
+        ``` r
+        download.file(
+          url = "https://data.ecoforecast.org/targets/phenology/phenology-targets.csv.gz", 
+          destfile = "/efi_neon_challenge/targets/phenology/phenology-targets.csv.gz"
+        )
+        ```
 
-4.  Go to `index.Rmd` and click on “Run Document” to load the Shiny app
+4.  Compute and download the CRPS score of forecasts, use the
+    `download_scores()` function:
+    
+    ``` r
+    download_scores("phenology", dir = "/efi_neon_challenge/scores/")
+    ```
+
+5.  Go to `index.Rmd` and click on “Run Document” to load the Shiny app
